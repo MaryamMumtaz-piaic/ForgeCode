@@ -1,12 +1,13 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { AgentState } from '@forgecode/agent-runtime';
 
 interface Props {
+  model: string;
   tokens: number;
-  stepCount: number;
-  maxSteps: number;
-  elapsedMs: number;
   toolCount: number;
+  elapsedMs: number;
+  agentState: AgentState;
 }
 
 function formatDuration(ms: number): string {
@@ -16,18 +17,30 @@ function formatDuration(ms: number): string {
 }
 
 function formatTokens(n: number): string {
-  if (n < 1000) return `${n}`;
-  return `${(n / 1000).toFixed(1)}k`;
+  if (n === 0) return '';
+  if (n < 1000) return `${n} tok`;
+  return `${(n / 1000).toFixed(1)}k tok`;
 }
 
-export function StatusBar({ tokens, stepCount, maxSteps, elapsedMs, toolCount }: Props) {
+const ACTIVE_STATES = new Set<AgentState>([
+  AgentState.THINKING, AgentState.PLANNING, AgentState.SEARCHING,
+  AgentState.READING, AgentState.EDITING, AgentState.EXECUTING, AgentState.VERIFYING,
+]);
+
+export function StatusBar({ model, tokens, toolCount, elapsedMs, agentState }: Props) {
+  const isActive = ACTIVE_STATES.has(agentState);
+  const tokStr = formatTokens(tokens);
+  const durStr = isActive ? formatDuration(elapsedMs) : '';
+
   return (
-    <Box paddingX={1} gap={3} borderStyle="single" borderColor="gray">
-      <Text dimColor>tokens <Text color="white">{formatTokens(tokens)}</Text></Text>
-      <Text dimColor>steps <Text color="white">{stepCount}</Text><Text>/{maxSteps}</Text></Text>
-      {toolCount > 0 && <Text dimColor>tools <Text color="white">{toolCount}</Text></Text>}
-      <Text dimColor>{formatDuration(elapsedMs)}</Text>
-      <Text dimColor>Ctrl+C cancel/exit  Ctrl+L clear</Text>
+    <Box paddingX={1} borderStyle="single" borderColor="gray" justifyContent="space-between">
+      <Box gap={3}>
+        {tokStr ? <Text dimColor>{tokStr}</Text> : null}
+        {toolCount > 0 && <Text dimColor>{toolCount} tools</Text>}
+        {durStr ? <Text dimColor>{durStr}</Text> : null}
+        {!isActive && <Text dimColor>Ctrl+C exit  Ctrl+L clear  / commands</Text>}
+      </Box>
+      <Text dimColor>{model}</Text>
     </Box>
   );
 }

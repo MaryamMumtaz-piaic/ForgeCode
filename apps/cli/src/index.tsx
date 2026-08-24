@@ -15,7 +15,8 @@ program
   .option('--model <model>', 'AI model', process.env['OPENAI_MODEL'] ?? 'gpt-4.1-mini')
   .option('--auto', 'Autonomous mode — no approval prompts')
   .option('--readonly', 'Read-only mode')
-  .option('--cwd <path>', 'Working directory', process.cwd());
+  .option('--cwd <path>', 'Working directory', process.cwd())
+  .action(() => {});
 
 program
   .command('doctor')

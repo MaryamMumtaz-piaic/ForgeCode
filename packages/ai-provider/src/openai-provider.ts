@@ -13,7 +13,8 @@ export class OpenAIProvider implements AIProvider {
 
   async *stream(input: AgentInput, signal?: AbortSignal): AsyncIterable<ModelEvent> {
     const messages = this.buildMessages(input);
-    const tools = this.buildTools(input);
+    const nameMap = this.buildToolNameMap(input);
+    const tools = this.buildTools(input, nameMap);
 
     const stream = await this.client.chat.completions.create(
       {
@@ -40,13 +41,14 @@ export class OpenAIProvider implements AIProvider {
 
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
+          const sanitizedName = tc.function?.name ? (nameMap.get(tc.function.name) ?? tc.function.name) : '';
           if (!pendingToolCalls.has(tc.index)) {
-            pendingToolCalls.set(tc.index, { id: tc.id ?? '', name: tc.function?.name ?? '', args: '' });
-            yield { type: 'tool_call_start', callId: tc.id ?? String(tc.index), toolName: tc.function?.name ?? '' };
+            pendingToolCalls.set(tc.index, { id: tc.id ?? '', name: sanitizedName, args: '' });
+            yield { type: 'tool_call_start', callId: tc.id ?? String(tc.index), toolName: sanitizedName };
           }
           const pending = pendingToolCalls.get(tc.index)!;
           if (tc.id) pending.id = tc.id;
-          if (tc.function?.name) pending.name = tc.function.name;
+          if (tc.function?.name) pending.name = sanitizedName;
           if (tc.function?.arguments) {
             pending.args += tc.function.arguments;
             yield { type: 'tool_call_delta', callId: pending.id, argumentsDelta: tc.function.arguments };
@@ -75,7 +77,8 @@ export class OpenAIProvider implements AIProvider {
 
   async generate(input: AgentInput, signal?: AbortSignal): Promise<ModelResponse> {
     const messages = this.buildMessages(input);
-    const tools = this.buildTools(input);
+    const nameMap = this.buildToolNameMap(input);
+    const tools = this.buildTools(input, nameMap);
 
     const response = await this.client.chat.completions.create(
       {
@@ -93,7 +96,7 @@ export class OpenAIProvider implements AIProvider {
     const content = choice?.message?.content ?? '';
     const toolCalls = (choice?.message?.tool_calls ?? []).map(tc => ({
       callId: tc.id,
-      toolName: tc.function.name,
+      toolName: nameMap.get(tc.function.name) ?? tc.function.name,
       arguments: JSON.parse(tc.function.arguments) as unknown,
     }));
 
@@ -137,12 +140,24 @@ export class OpenAIProvider implements AIProvider {
     return result;
   }
 
-  private buildTools(input: AgentInput): OpenAI.Chat.ChatCompletionTool[] {
+  // OpenAI requires tool names to match /^[a-zA-Z0-9_-]+$/, but our internal tool
+  // names use dotted namespacing (e.g. "filesystem.move"). Sanitize outbound names
+  // and keep a reverse map so tool_call responses resolve back to the real name.
+  private buildToolNameMap(input: AgentInput): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const t of input.tools ?? []) {
+      map.set(t.name.replace(/[^a-zA-Z0-9_-]/g, '_'), t.name);
+    }
+    return map;
+  }
+
+  private buildTools(input: AgentInput, nameMap: Map<string, string>): OpenAI.Chat.ChatCompletionTool[] {
     if (!input.tools?.length) return [];
+    const sanitizedByOriginal = new Map([...nameMap].map(([sanitized, original]) => [original, sanitized]));
     return input.tools.map(t => ({
       type: 'function' as const,
       function: {
-        name: t.name,
+        name: sanitizedByOriginal.get(t.name) ?? t.name,
         description: t.description,
         parameters: t.parameters,
       },
