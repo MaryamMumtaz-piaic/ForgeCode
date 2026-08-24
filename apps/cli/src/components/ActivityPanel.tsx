@@ -2,9 +2,11 @@ import React from 'react';
 import { Box, Text } from 'ink';
 
 export interface ToolActivity {
+  id: string;
   name: string;
   status: 'running' | 'done' | 'error';
   durationMs?: number;
+  inputSummary?: string;
 }
 
 interface Props {
@@ -17,29 +19,27 @@ function formatDuration(ms?: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
 export function ActivityPanel({ activities }: Props) {
-  if (activities.length === 0) return null;
+  const running = activities.filter(a => a.status === 'running');
+  if (running.length === 0) return null;
+
+  const frame = SPINNER_FRAMES[Math.floor(Date.now() / 80) % SPINNER_FRAMES.length] ?? '⠋';
+
   return (
-    <Box flexDirection="column" paddingX={1} paddingBottom={1}>
-      <Text bold color="yellow">⚡ Agent Activity</Text>
-      {activities.map((a, i) => {
-        const isLast = i === activities.length - 1;
-        const prefix = isLast ? '└─' : '├─';
-        const statusIcon =
-          a.status === 'running' ? '◌' : a.status === 'done' ? '✓' : '✗';
-        const statusColor =
-          a.status === 'running' ? 'cyan' : a.status === 'done' ? 'green' : 'red';
-        return (
-          <Box key={i}>
-            <Text dimColor>{prefix} </Text>
-            <Text color={statusColor}>{statusIcon} </Text>
-            <Text>{a.name}</Text>
-            {a.durationMs !== undefined && (
-              <Text dimColor>{'  ' + formatDuration(a.durationMs)}</Text>
-            )}
-          </Box>
-        );
-      })}
+    <Box flexDirection="column" paddingX={2} paddingBottom={0}>
+      <Box gap={1}>
+        <Text color="cyan">{frame}</Text>
+        <Text color="cyan" bold>Agent working</Text>
+      </Box>
+      {running.slice(0, 3).map(a => (
+        <Box key={a.id} paddingLeft={2}>
+          <Text dimColor>→ </Text>
+          <Text color="cyan">{a.name}</Text>
+          {a.inputSummary && <Text dimColor>  {a.inputSummary}</Text>}
+        </Box>
+      ))}
     </Box>
   );
 }

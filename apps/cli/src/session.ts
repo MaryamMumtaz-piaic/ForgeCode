@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+import { execa } from 'execa';
 import { runAgentLoop, AgentState, buildSystemPrompt } from '@forgecode/agent-runtime';
 import { createProviderFromEnv } from '@forgecode/ai-provider';
 import { ToolRegistry, ToolExecutor } from '@forgecode/tool-runtime';
@@ -5,14 +7,14 @@ import { PermissionEngine, ApprovalMode } from '@forgecode/permission-engine';
 import { getAllFilesystemTools } from '@forgecode/filesystem';
 import { getAllShellTools } from '@forgecode/shell';
 import { getAllGitTools } from '@forgecode/git';
-import { ApprovalAnswer, ApprovalRequest } from './components/ApprovalPrompt.js';
+import type { ApprovalAnswer, ApprovalRequest } from './components/ApprovalPrompt.js';
 
 export interface RunCallbacks {
   signal: AbortSignal;
   onStateChange(state: AgentState): void;
   onTextDelta(delta: string): void;
-  onToolStart(name: string): void;
-  onToolEnd(name: string, durationMs: number, success: boolean): void;
+  onToolStart(id: string, name: string, input?: unknown): void;
+  onToolEnd(id: string, name: string, durationMs: number, success: boolean, output?: unknown): void;
   onTokens(count: number): void;
   onComplete(result?: string): void;
   onError(error: string): void;
@@ -21,7 +23,6 @@ export interface RunCallbacks {
 
 export class ForgeSession {
   private readonly registry: ToolRegistry;
-  private readonly provider = createProviderFromEnv();
 
   constructor(
     private readonly cwd: string,
@@ -35,6 +36,37 @@ export class ForgeSession {
       ...getAllGitTools(),
     ]) {
       this.registry.register(tool as never);
+    }
+  }
+
+  async runShell(command: string, callbacks: RunCallbacks): Promise<void> {
+    const id = `shell-${Date.now()}`;
+    callbacks.onStateChange(AgentState.EXECUTING);
+    callbacks.onToolStart(id, command, { command });
+    const start = Date.now();
+    try {
+      const result = await execa('powershell.exe', ['-NonInteractive', '-Command', command], {
+        cwd: this.cwd,
+        reject: false,
+        cancelSignal: callbacks.signal as AbortSignal,
+        timeout: 120_000,
+      });
+      const duration = Date.now() - start;
+      const output = [
+        result.stdout,
+        result.stderr ? `STDERR: ${result.stderr}` : '',
+        `Exit: ${result.exitCode}`,
+        `Duration: ${(duration / 1000).toFixed(1)}s`,
+      ].filter(Boolean).join('\n');
+      callbacks.onToolEnd(id, command, duration, (result.exitCode ?? 1) === 0, { output, exitCode: result.exitCode });
+      callbacks.onStateChange(AgentState.COMPLETED);
+      callbacks.onComplete(output);
+    } catch (err) {
+      const duration = Date.now() - start;
+      const msg = err instanceof Error ? err.message : String(err);
+      callbacks.onToolEnd(id, command, duration, false, { error: msg });
+      callbacks.onStateChange(AgentState.FAILED);
+      callbacks.onError(msg);
     }
   }
 
@@ -85,7 +117,12 @@ export class ForgeSession {
           )) {
             if (event.type === 'text_delta') yield { type: 'text' as const, text: event.delta };
             else if (event.type === 'tool_call_end') {
-              yield { type: 'tool_call' as const, toolName: event.toolName, toolInput: event.arguments, callId: event.callId };
+              yield {
+                type: 'tool_call' as const,
+                toolName: event.toolName,
+                toolInput: event.arguments,
+                callId: event.callId,
+              };
             } else if (event.type === 'usage') {
               yield { type: 'usage' as const, tokens: event.totalTokens };
             } else if (event.type === 'done') {
@@ -95,11 +132,12 @@ export class ForgeSession {
         },
 
         async executeTool(name, input, signal) {
+          const callId = randomUUID();
           const start = Date.now();
-          callbacks.onToolStart(name);
+          callbacks.onToolStart(callId, name, input);
           const result = await executor.execute(name, input, signal);
           const dur = Date.now() - start;
-          callbacks.onToolEnd(name, dur, result.result.success);
+          callbacks.onToolEnd(callId, name, dur, result.result.success, result.result.output);
           return result.result.output;
         },
 
