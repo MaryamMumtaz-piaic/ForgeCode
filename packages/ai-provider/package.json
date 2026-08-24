@@ -1,0 +1,16 @@
+{
+  "name": "@forgecode/ai-provider",
+  "version": "0.1.0",
+  "description": "AI provider abstraction with OpenAI implementation for ForgeCode",
+  "type": "module",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .tsbuildinfo"
+  },
+  "dependencies": { "openai": "^4.52.0" },
+  "devDependencies": { "rimraf": "^6.0.0", "@types/node": "^22.0.0", "typescript": "^5.5.0" }
+}

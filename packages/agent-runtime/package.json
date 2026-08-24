@@ -1,0 +1,27 @@
+{
+  "name": "@forgecode/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "@forgecode/ai-provider": "workspace:*",
+    "@forgecode/tool-runtime": "workspace:*",
+    "@forgecode/permission-engine": "workspace:*",
+    "@forgecode/task-engine": "workspace:*",
+    "@forgecode/memory": "workspace:*",
+    "@forgecode/telemetry": "workspace:*",
+    "@forgecode/context-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@forgecode/orchestrator",
+  "version": "0.1.0",
+  "description": "Multi-agent orchestration for ForgeCode — master agent delegates to specialized sub-agents",
+  "type": "module",
+  "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
